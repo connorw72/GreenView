@@ -205,3 +205,24 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# skip big raw/derived files
+data/raw/
+data/processed/
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# local scratch
+notebooks/.ipynb_checkpoints/
+tiger_imp/
+.cache/
+.cache/osmnx/
+.osmnx_cache/
+
+# exports that can change in size
+outputs/maps/*.tiles/
+outputs/tiles/
+
+# OS things
+.DS_Store
+Thumbs.db

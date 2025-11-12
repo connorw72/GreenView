@@ -1,9 +1,11 @@
 """
 This module is meant to 
 1. Get the San Diego city boundary
-2. Pull greenspace data from OpenStreetMap
+2. Pull public greenspace shapes from inside of the boundary using OpenStreetMap
 Download the city boundary, download public greenspace polygons within boundary
-Save both to GeoJSON files so that they can be open and previewed
+Save both as GeoJSON files for easy viewing
+GeoJSON: text file format for storing maps
+EPSG:4326 : global coordinate system, standard used by GeoJSON and web maps
 """
 
 # where do you get green space dictionary tags?
@@ -13,16 +15,15 @@ Save both to GeoJSON files so that they can be open and previewed
 # build file paths without hardcoding slashes
 from pathlib import Path
 
-
 import os
 
 # cleanup data
 import pandas as pd
 
-# Geospatial tables
+# treat geospatial data as a table
 import geopandas as gpd
 
-# fetch data from OpenStreetMap
+# fetches from global, public map database(osm)
 import osmnx as ox
 
 # tell osm which geocode, and set output folder
@@ -33,12 +34,8 @@ DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
 
 PLACE = "San Diego, California, USA"
 
-# dictionary telling osm which features to fetch
-# classify parks, gardens, water bodies, etc. as green space
+# osm stores with key/value labels
 GREEN_TAGS = {
-    # "leisure": ["park", "garden"],
-    # "landuse": ["grass"],
-    # "natural": ["wood"]
     "leisure": ["park", "garden", "recreation_ground", "golf_course", "pitch", "playground", "dog_park"],
     "landuse": ["grass", "meadow", "village_green", "forest"],
     "natural": ["wood", "scrub", "heath", "grassland", "wetland", "water"],

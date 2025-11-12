@@ -1,15 +1,11 @@
 """
-Compute metrics based on neighborhood units to score and map each unit.
-Takes city boundary and OSM greenspace
-Produces block-group GeoJSON with Greenscore metrics
+
 """
 
-# geospatial data frame tools and folder handling
 import geopandas as gpd
 import pandas as pd
 import requests
 from pathlib import Path
-# pull ACS and geometries in one shot
 from cenpy import products
 
 DATA_DIR = Path("data")
@@ -18,15 +14,13 @@ PROCESSED.mkdir(parents=True, exist_ok=True)
 
 def load_boundary():
     """
-    reads previously saved city boundary and standardizes
+    
     """
     return gpd.read_file(PROCESSED / "city_boundary.geojson").to_crs(4326)
 
 def load_greenspace():
     """
-    Read OpenStreetMap greenspace polygons. Tries the filename produced by
-    src/ingest.py (greenspace_raw.geojson) and falls back to the older
-    osm_greenspace.geojson if present.
+    
     """
     primary = PROCESSED / "greenspace_raw.geojson"
     fallback = PROCESSED / "osm_greenspace.geojson"
@@ -40,10 +34,8 @@ def load_greenspace():
 
 def get_blockgroups_population():
     """
-    Pull San Diego block groups with ACS 2023 data
-    Returns a GeoDataFrame with geometry and population
+    
     """
-    # Prefer 2023 via Census API + pygris geometries; otherwise fall back.
     try:
         return _get_bg_population_via_census_api(2023)
     except Exception as e_api:
@@ -81,10 +73,9 @@ def _get_bg_population_via_census_api(year: int) -> gpd.GeoDataFrame:
     except Exception as e:
         raise RuntimeError("pygris is required for 2023 geometries. Install it from requirements.txt.") from e
 
-    # Use B01001_001E (Total population) which is stable for 2020+.
     var = "B01001_001E"
-    state_fips = "06"  # California
-    county_fips = "073"  # San Diego County
+    state_fips = "06"  
+    county_fips = "073" 
     url = f"https://api.census.gov/data/{year}/acs/acs5"
     params = {
         "get": f"NAME,{var}",
@@ -97,12 +88,10 @@ def _get_bg_population_via_census_api(year: int) -> gpd.GeoDataFrame:
     cols, rows = data[0], data[1:]
     df = pd.DataFrame(rows, columns=cols)
 
-    # Construct 12-digit GEOID: state(2)+county(3)+tract(6)+block group(1)
     df["GEOID"] = df["state"] + df["county"] + df["tract"] + df["block group"]
     df["population"] = pd.to_numeric(df[var], errors="coerce")
     df = df[["GEOID", "population"]]
 
-    # Get geometries for the same year
     geos = block_groups(state="CA", county="San Diego", year=year, cb=True)
     geos = geos.to_crs(4326)[["GEOID", "geometry"]]
 
@@ -111,7 +100,7 @@ def _get_bg_population_via_census_api(year: int) -> gpd.GeoDataFrame:
 
 def clip_to_city(gdf, city_boundary):
     """
-    Clip to city limits
+
     """
     return gpd.clip(gdf, city_boundary)
 
@@ -124,20 +113,16 @@ def compute_metrics(city_bg, greens):
     green_area_per_person: green_area / population
     green_score: 1-100 socre normalized combining % green + per person area
     """
-    # project to a metric CRS for accurate area
     city_bg_meters = city_bg.to_crs(3857)
     green_meters = greens.to_crs(3857)
 
-    # Ensure both inputs are polygon-only and not mixed types for overlay
     def _to_polygons_only(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         gdf = gdf[~gdf.geometry.isna()].copy()
         gdf = gdf[gdf.geometry.geom_type.isin(["Polygon", "MultiPolygon"])].copy()
-        # Fix invalids if present
         try:
             gdf["geometry"] = gdf.geometry.buffer(0)
         except Exception:
             pass
-        # Explode MultiPolygons to Polygons to avoid mixed geometry types
         try:
             gdf = gdf.explode(index_parts=True)
         except TypeError:
@@ -149,14 +134,11 @@ def compute_metrics(city_bg, greens):
     city_bg_meters = _to_polygons_only(city_bg_meters)
     green_meters = _to_polygons_only(green_meters)
 
-    # intersect greenspace with block groups to get green chunks per block group
     intersect = gpd.overlay(green_meters, city_bg_meters[["GEOID", "geometry"]], how="intersection")
 
-    # green area per intersect piece and sum by block group
     intersect["green_area"] = intersect.geometry.area
     green_by_bg = intersect.groupby("GEOID", as_index=False)["green_area"].sum()
 
-    # compute total block group area within city
     city_bg_meters["blockgroup_area"] = city_bg_meters.geometry.area
 
     output = city_bg_meters.merge(green_by_bg, on="GEOID", how="left")
